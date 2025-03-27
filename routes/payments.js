@@ -64,6 +64,21 @@ router.post('/pay', auth, async (req, res) => {
       });
     }
 
+    const remainingAmount = userAssociation.remainingAmount;
+    if (remainingAmount === 0) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        error: 'تم دفع المبلغ كاملاً لا داعي للدفع مرة اخري'
+      });
+    } else if (remainingAmount < amount) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        error: `المبلغ المتبقي للدفع ${remainingAmount} جنيه فقط`
+      });
+    } 
+
     // إنشاء الدفع
     const payment = await Payment.create({
       userId: req.user.id,

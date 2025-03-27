@@ -249,8 +249,7 @@ router.post('/:id/join', auth, async (req, res) => {
 router.get('/my-associations', auth, async (req, res) => {
   try {
     const user = req.user;
-    console.log("my-associations was hit!");
-
+    
     const userWithAssociations = await User.findByPk(user.id, {
       include: [{
         model: Association,
