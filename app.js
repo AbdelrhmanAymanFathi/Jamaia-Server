@@ -9,7 +9,7 @@ const cors = require('cors');
 const authRoutes = require('./routes/auth');
 const authTestRoutes = require('./routes/auth_test');
 const associationRoutes = require('./routes/associations');
-const userRoutes = require('./routes/users');
+const userRoutes = require('./routes/userData');
 const paymentRoutes = require('./routes/payments');
 
 app.use(cors());
@@ -18,7 +18,7 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/auth-test', authTestRoutes);
-// app.use('/api/users', userRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/associations', associationRoutes);
 app.use('/api/payments', paymentRoutes);
 

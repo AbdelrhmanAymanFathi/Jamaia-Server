@@ -34,7 +34,7 @@ router.post('/', [auth, admin], async (req, res) => {
       monthlyAmount: parseFloat(monthlyAmount),
       duration: parseInt(duration),
       startDate: startDate ? new Date(startDate) : new Date(),
-      status: 'active'
+      status: 'pending'
     };
 
     // ================ التحقق من التواريخ ================
@@ -103,7 +103,7 @@ router.get('/', auth, async (req, res) => {
     const whereClause = {};
     if (status) {
       whereClause.status = {
-        [Op.eq]: status // استخدام عامل المقارنة Op.eq للتطابق التام
+        [Op.eq]: status || "pending" // استخدام عامل المقارنة Op.eq للتطابق التام
       };
     }
 
@@ -183,7 +183,7 @@ router.post('/:id/join', auth, async (req, res) => {
     }
 
     // التحقق من حالة الجمعية
-    if (association.status !== 'active') {
+    if (association.status !== 'pending') {
       return res.status(400).json({
         success: false,
         error: 'لا يمكن الانضمام لجمعية غير نشطة'
@@ -249,6 +249,7 @@ router.post('/:id/join', auth, async (req, res) => {
 router.get('/my-associations', auth, async (req, res) => {
   try {
     const user = req.user;
+    console.log("my-associations was hit!");
 
     const userWithAssociations = await User.findByPk(user.id, {
       include: [{

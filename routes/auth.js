@@ -4,8 +4,10 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user');
 const multer = require('multer');
+const fs = require('fs');
 require('dotenv').config();
 
+const path = require('path');
 const upload = multer({ dest: 'uploads/' });
 
 router.post('/register', upload.fields([
@@ -13,13 +15,26 @@ router.post('/register', upload.fields([
   { name: 'salarySlipImage', maxCount: 1 }
 ]), async (req, res) => {
   // معالجة بيانات التسجيل
+  const profileImageFile = req.files['profileImage'][0];
+  const salarySlipImageFile = req.files['salarySlipImage'][0];
+
+  const profileImageExt = path.extname(profileImageFile.originalname);
+  const salarySlipImageExt = path.extname(salarySlipImageFile.originalname);
+
+  const newProfileImagePath = profileImageFile.path + profileImageExt;
+  const newSalarySlipImagePath = salarySlipImageFile.path + salarySlipImageExt;
+
+  fs.renameSync(profileImageFile.path, newProfileImagePath);
+  fs.renameSync(salarySlipImageFile.path, newSalarySlipImagePath);
+
   const userData = {
     ...req.body,
-    profileImage: req.files['profileImage'][0].path,
-    salarySlipImage: req.files['salarySlipImage'][0].path
+    profileImage: newProfileImagePath.replace(/\\/g, '/'),
+    salarySlipImage: newSalarySlipImagePath.replace(/\\/g, '/')
   };
   
   const user = await User.create(userData);
+  console.log('User created:', user.nationalId); // إضافة log
   res.send(user);
 });
 
