@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { User, Association, UserAssociation } = require('../models');
+const { User, Association, UserAssociation, Payment } = require('../models');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 const { Op } = require('sequelize');
 
 router.post('/', [auth, admin], async (req, res) => {
   try {
-    const { name, monthlyAmount, duration, startDate } = req.body;
+    const { name, monthlyAmount, duration, startDate, collectionOrderType } = req.body;
 
     // ================ التحقق من البيانات المدخلة ================
     const errors = [];
@@ -34,7 +34,8 @@ router.post('/', [auth, admin], async (req, res) => {
       monthlyAmount: parseFloat(monthlyAmount),
       duration: parseInt(duration),
       startDate: startDate ? new Date(startDate) : new Date(),
-      status: 'pending'
+      status: 'pending',
+      collectionOrderType: collectionOrderType || 'lottery'
     };
 
     // ================ التحقق من التواريخ ================
@@ -68,7 +69,8 @@ router.post('/', [auth, admin], async (req, res) => {
         monthlyAmount: association.monthlyAmount,
         status: association.status || 'active',
         duration: association.duration,
-        startDate: association.startDate.toISOString().split('T')[0]
+        startDate: association.startDate.toISOString().split('T')[0],
+        collectionOrderType: association.collectionOrderType
       }
     });
 
@@ -206,12 +208,28 @@ router.post('/:id/join', auth, async (req, res) => {
     }
 
     // التسجيل في الجمعية مع التحقق من البيانات
+    let collectionOrder;
+    if (association.collectionOrderType === 'lottery') {
+      // Determine collection order by lottery (simple example: random number)
+      collectionOrder = Math.floor(Math.random() * association.duration) + 1;
+    } else if (association.collectionOrderType === 'fixed') {
+      // Implement your fixed order logic here
+      // Example: Assign collection order based on join date
+      const userAssociationsCount = await UserAssociation.count({
+        where: { associationId: association.id }
+      });
+      collectionOrder = userAssociationsCount + 1;
+    } else {
+      collectionOrder = null;
+    }
+
     const newMembership = await UserAssociation.create({
       UserId: user.id,
       AssociationId: association.id,
       remainingAmount: association.monthlyAmount * association.duration,
       joinDate: new Date(),
-      status: 'active'
+      status: 'active',
+      collectionOrder: collectionOrder
     });
 
     // الرد الناجح مع بيانات العضوية
@@ -221,7 +239,8 @@ router.post('/:id/join', auth, async (req, res) => {
       membership: {
         id: newMembership.id,
         joinDate: newMembership.joinDate,
-        status: newMembership.status
+        status: newMembership.status,
+        collectionOrder: newMembership.collectionOrder
       }
     });
 
@@ -241,6 +260,106 @@ router.post('/:id/join', auth, async (req, res) => {
         message: error.message,
         stack: error.stack
       } : null
+    });
+  }
+});
+
+// Route to handle collection process (any user can trigger, but only the correct user can collect)
+router.post('/:id/collect', auth, async (req, res) => {
+  try {
+    const associationId = req.params.id;
+    const userId = req.user.id;
+
+    // Find the association
+    const association = await Association.findByPk(associationId);
+    if (!association) {
+      return res.status(404).json({ success: false, error: 'Association not found' });
+    }
+
+    // Find the user who joined the association first and hasn't collected yet
+    const userAssociation = await UserAssociation.findOne({
+      where: {
+        associationId: associationId
+      },
+      order: [['joinDate', 'ASC']],
+      include: {
+        model: User,
+        attributes: ['id', 'walletBalance']
+      }
+    });
+
+    if (!userAssociation) {
+      return res.status(404).json({ success: false, error: 'No members found in this association' });
+    }
+
+    // Determine the current turn based on the user who joined first
+    const currentTurn = userAssociation.collectionOrder;
+
+    // Find the user who should receive the amount in this turn
+    const collectingUserAssociation = await UserAssociation.findOne({
+      where: {
+        associationId: associationId,
+        collectionOrder: currentTurn,
+        UserId: userId // Ensure the user ID matches
+      },
+      include: {
+        model: User,
+        attributes: ['id', 'walletBalance']
+      }
+    });
+
+    if (!collectingUserAssociation) {
+      return res.status(403).json({
+        success: false,
+        error: 'ليس دورك في التحصيل حاليا',
+        details: `Current turn: ${currentTurn}`
+      });
+    }
+
+    // Check if this turn has already been collected
+    const existingCollection = await Payment.findOne({
+      where: {
+        associationId: associationId,
+        turn: currentTurn
+      }
+    });
+
+    if (existingCollection) {
+      return res.status(400).json({ success: false, error: 'تم تحصيل هذا الدور بالفعل' });
+    }
+
+    const user = collectingUserAssociation.User;
+    const totalAmount = association.monthlyAmount * association.duration;
+
+    // Update user's wallet balance
+    user.walletBalance += totalAmount;
+    await user.save();
+
+    // Create a new payment record
+    await Payment.create({
+      userId: user.id,
+      associationId: associationId,
+      amount: totalAmount,
+      paymentDate: new Date(),
+      turn: currentTurn // Store the turn number
+    });
+
+    // Optionally, update association status or log the collection
+    res.json({
+      success: true,
+      message: `تم توزيع المبلغ المحصل للمستخدم ${user.id}`,
+      user: {
+        id: user.id,
+        walletBalance: user.walletBalance
+      }
+    });
+
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'فشل في عملية التحصيل',
+      details: process.env.NODE_ENV === 'development' ? error.message : null
     });
   }
 });
@@ -275,6 +394,48 @@ router.get('/my-associations', auth, async (req, res) => {
       status: association.status,
       joinDate: association.UserAssociation.joinDate
     }));
+
+    res.json({ success: true, data: formattedData });
+
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'فشل في الاسترجاع',
+      details: process.env.NODE_ENV === 'development' ? error.message : null
+    });
+  }
+});
+
+// استرجاع الجمعيات التي يمكن للمستخدم تحصيلها
+router.get('/collectable', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Find associations where the user can collect
+    const collectableAssociations = await UserAssociation.findAll({
+      where: {
+        UserId: userId,
+        status: 'active'
+      },
+      include: [{
+        model: Association,
+        attributes: ['id', 'name', 'monthlyAmount', 'duration', 'startDate', 'status']
+      }]
+    });
+
+    const formattedData = collectableAssociations.map(userAssociation => {
+      const association = userAssociation.Association;
+      return {
+        associationId: association.id,
+        associationName: association.name,
+        monthlyAmount: association.monthlyAmount,
+        duration: association.duration,
+        startDate: association.startDate,
+        status: association.status,
+        collectionOrder: userAssociation.collectionOrder
+      };
+    });
 
     res.json({ success: true, data: formattedData });
 

@@ -11,13 +11,20 @@ const Association = sequelize.define('Association', {
     defaultValue: 'active'
   },
   startDate: { type: DataTypes.DATE, allowNull: false },
-  duration: { type: DataTypes.INTEGER } // عدد الأشهر
+  duration: { type: DataTypes.INTEGER }, // عدد الأشهر
+  collectionOrderType: {
+    type: DataTypes.ENUM('lottery', 'fixed'),
+    defaultValue: 'lottery'
+  }
 });
 
 const UserAssociation = sequelize.define('UserAssociation', {
   joinDate: DataTypes.DATE,
   status: DataTypes.STRING,
   remainingAmount: DataTypes.FLOAT,
+  collectionOrder: {
+    type: DataTypes.INTEGER
+  }
 });
 
 module.exports = { Association, UserAssociation };

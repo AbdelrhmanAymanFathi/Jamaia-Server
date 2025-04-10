@@ -32,6 +32,15 @@ router.post('/pay', auth, async (req, res) => {
       });
     }
 
+    // Check if the association is active
+    if (association.status !== 'active') {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        error: 'لا يمكن الدفع لجمعية غير نشطة'
+      });
+    }
+
     if (isNaN(amount)) {
       await transaction.rollback();
       return res.status(400).json({
@@ -65,19 +74,31 @@ router.post('/pay', auth, async (req, res) => {
     }
 
     const remainingAmount = userAssociation.remainingAmount;
+    const tolerance = 0.001; // Define a small tolerance value
     if (remainingAmount === 0) {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
         error: 'تم دفع المبلغ كاملاً لا داعي للدفع مرة اخري'
       });
-    } else if (remainingAmount < amount) {
+    } else if (remainingAmount < amount - tolerance) {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
         error: `المبلغ المتبقي للدفع ${remainingAmount} جنيه فقط`
       });
-    } 
+    }
+
+    // Check if the payment is for the current month
+    const now = new Date();
+    const currentMonthAmount = association.monthlyAmount; // Assuming monthly payments
+    if (amount !== currentMonthAmount) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        error: `يجب دفع مبلغ ${currentMonthAmount} جنيه لهذا الشهر`
+      });
+    }
 
     // إنشاء الدفع
     const payment = await Payment.create({

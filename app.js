@@ -4,6 +4,9 @@ const express = require('express');
 const app = express();
 const sequelize = require('./config/db');
 const cors = require('cors');
+const cron = require('node-cron');
+const { Association } = require('./models');
+const { Op } = require('sequelize');
 
 // استيراد الرواتر بشكل صحيح
 const authRoutes = require('./routes/auth');
