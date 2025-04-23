@@ -6,6 +6,8 @@ const User = require('../models/user');
 const multer = require('multer');
 const fs = require('fs');
 require('dotenv').config();
+const { Op } = require('sequelize');
+
 
 const path = require('path');
 const upload = multer({ dest: 'uploads/' });
@@ -14,29 +16,49 @@ router.post('/register', upload.fields([
   { name: 'profileImage', maxCount: 1 },
   { name: 'salarySlipImage', maxCount: 1 }
 ]), async (req, res) => {
-  // معالجة بيانات التسجيل
-  const profileImageFile = req.files['profileImage'][0];
-  const salarySlipImageFile = req.files['salarySlipImage'][0];
+  try {
+    const profileImageFile = req.files['profileImage'][0];
+    const salarySlipImageFile = req.files['salarySlipImage'][0];
 
-  const profileImageExt = path.extname(profileImageFile.originalname);
-  const salarySlipImageExt = path.extname(salarySlipImageFile.originalname);
+    const profileImageExt = path.extname(profileImageFile.originalname);
+    const salarySlipImageExt = path.extname(salarySlipImageFile.originalname);
 
-  const newProfileImagePath = profileImageFile.path + profileImageExt;
-  const newSalarySlipImagePath = salarySlipImageFile.path + salarySlipImageExt;
+    const newProfileImagePath = profileImageFile.path + profileImageExt;
+    const newSalarySlipImagePath = salarySlipImageFile.path + salarySlipImageExt;
 
-  fs.renameSync(profileImageFile.path, newProfileImagePath);
-  fs.renameSync(salarySlipImageFile.path, newSalarySlipImagePath);
+    fs.renameSync(profileImageFile.path, newProfileImagePath);
+    fs.renameSync(salarySlipImageFile.path, newSalarySlipImagePath);
 
-  const userData = {
-    ...req.body,
-    profileImage: newProfileImagePath.replace(/\\/g, '/'),
-    salarySlipImage: newSalarySlipImagePath.replace(/\\/g, '/')
-  };
-  
-  const user = await User.create(userData);
-  console.log('User created:', user.nationalId); // إضافة log
-  res.send(user);
+    const userData = {
+      ...req.body,
+      profileImage: newProfileImagePath.replace(/\\/g, '/'),
+      salarySlipImage: newSalarySlipImagePath.replace(/\\/g, '/')
+    };
+
+    // Check if phone or nationalId already exists
+    const existingUser = await User.findOne({
+      where: {
+        [Op.or]: [
+          { phone: userData.phone },
+          { nationalId: userData.nationalId }
+        ]
+      }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ error: 'رقم الهاتف أو رقم البطاقة مسجل مسبقًا' });
+    }
+
+    const user = await User.create(userData);
+    console.log('User created:', user.nationalId);
+    res.status(201).send(user);
+
+  } catch (err) {
+    console.error('Error in /register:', err);
+    res.status(500).json({ error: 'حدث خطأ أثناء التسجيل' });
+  }
 });
+
 
 router.post('/login', async (req, res) => {
   try {
