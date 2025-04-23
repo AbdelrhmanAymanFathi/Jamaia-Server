@@ -44,15 +44,15 @@ router.post('/register', upload.fields([
         ]
       }
     });
-
+      
     if (existingUser) {
       return res.status(400).json({ error: 'رقم الهاتف أو رقم البطاقة مسجل مسبقًا' });
     }
 
+    res.status(200).send(user);
     const user = await User.create(userData);
     console.log('User created:', user.nationalId);
-    res.status(201).send(user);
-
+    
   } catch (err) {
     console.error('Error in /register:', err);
     res.status(500).json({ error: 'حدث خطأ أثناء التسجيل' });
