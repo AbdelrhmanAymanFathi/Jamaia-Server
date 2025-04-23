@@ -35,7 +35,6 @@ router.post('/register', upload.fields([
       salarySlipImage: newSalarySlipImagePath.replace(/\\/g, '/')
     };
 
-    // Check if phone or nationalId already exists
     const existingUser = await User.findOne({
       where: {
         [Op.or]: [
@@ -49,10 +48,10 @@ router.post('/register', upload.fields([
       return res.status(400).json({ error: 'رقم الهاتف أو رقم البطاقة مسجل مسبقًا' });
     }
 
-    res.status(200).send(user);
     const user = await User.create(userData);
     console.log('User created:', user.nationalId);
-    
+    res.status(200).json(user);
+
   } catch (err) {
     console.error('Error in /register:', err);
     res.status(500).json({ error: 'حدث خطأ أثناء التسجيل' });
