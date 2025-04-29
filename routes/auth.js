@@ -85,11 +85,15 @@ router.post('/login', async (req, res) => {
 
     // إنشاء التوكن
     const token = jwt.sign(
-      { id: user.id, role: user.role },
+      {
+        id: user.id,
+        role: user.role,
+        walletBalance: user.walletBalance  // ✅ This line is critical
+      },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
-
+    
     res.send({ 
       token,
       user: {

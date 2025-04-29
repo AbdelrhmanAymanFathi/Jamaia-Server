@@ -325,6 +325,50 @@ router.get('/available', auth, async (req, res) => {
     res.status(500).json({ error: 'فشل في الاسترجاع' });
   }
 });
+ 
+router.post('/match', auth, async (req, res) => {
+  try {
+    // 1️⃣ Get the authenticated user's ID from the auth middleware
+    const userId = req.user.id;
 
+    // 2️⃣ Fetch the user's LATEST wallet balance from the database
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'المستخدم غير موجود' });
+    }
+
+    const userAmount = parseFloat(user.walletBalance);
+    if (isNaN(userAmount) || userAmount <= 0) {
+      return res.status(400).json({ error: 'رصيد المحفظة غير صالح أو غير كافي' });
+    }
+
+    // 3️⃣ Get all pending associations
+    const allAssociations = await Association.findAll({
+      where: { status: 'pending' },
+    });
+
+    // 4️⃣ Calculate threshold (30% of user's wallet balance)
+    const threshold = userAmount * 0.3;
+
+    // 5️⃣ Process associations
+    const matches = allAssociations
+      .filter(a => a.monthlyAmount <= userAmount) // Only affordable
+      .map(a => {
+        const association = a.toJSON();
+        return {
+          ...association,
+          difference: Math.abs(association.monthlyAmount - userAmount),
+          type: association.monthlyAmount >= threshold ? 'A' : 'B' // Dynamic type
+        };
+      })
+      .sort((a, b) => a.difference - b.difference) // Sort by closeness
+      .slice(0, 5); // Top 5 matches
+
+    res.json({ success: true, matches });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'حدث خطأ أثناء المطابقة' });
+  }
+});
 
 module.exports = router;
