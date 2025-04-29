@@ -11,7 +11,12 @@ const Association = sequelize.define('Association', {
     defaultValue: 'active'
   },
   startDate: { type: DataTypes.DATE, allowNull: false },
-  duration: { type: DataTypes.INTEGER } // عدد الأشهر
+  duration: { type: DataTypes.INTEGER }, // عدد الأشهر
+  type: {
+    type: DataTypes.ENUM('A', 'B'),  // <-- Add this
+    allowNull: false,
+    defaultValue: 'B'
+  }
 });
 
 const UserAssociation = sequelize.define('UserAssociation', {

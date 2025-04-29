@@ -7,7 +7,7 @@ const { Op } = require('sequelize');
 
 router.post('/', [auth, admin], async (req, res) => {
   try {
-    const { name, monthlyAmount, duration, startDate } = req.body;
+    const { name, monthlyAmount, duration, startDate , type } = req.body;
 
     // ================ التحقق من البيانات المدخلة ================
     const errors = [];
@@ -34,7 +34,9 @@ router.post('/', [auth, admin], async (req, res) => {
       monthlyAmount: parseFloat(monthlyAmount),
       duration: parseInt(duration),
       startDate: startDate ? new Date(startDate) : new Date(),
-      status: 'pending'
+      status: 'pending',
+      type: type || 'B' // تعيين النوع إلى 'B' بشكل افتراضي
+      
     };
 
     // ================ التحقق من التواريخ ================
@@ -68,7 +70,8 @@ router.post('/', [auth, admin], async (req, res) => {
         monthlyAmount: association.monthlyAmount,
         status: association.status || 'active',
         duration: association.duration,
-        startDate: association.startDate.toISOString().split('T')[0]
+        startDate: association.startDate.toISOString().split('T')[0],
+        type: association.type
       }
     });
 
@@ -287,5 +290,41 @@ router.get('/my-associations', auth, async (req, res) => {
     });
   }
 });
+
+router.get('/available', auth, async (req, res) => {
+  try {
+    const { amount } = req.query; // Example: /available?amount=3000
+    const userAmount = parseFloat(amount);
+
+    if (isNaN(userAmount)) {
+      return res.status(400).json({ error: 'المبلغ المدخل غير صالح' });
+    }
+
+    let typeFilter = ['B'];
+    if (userAmount >= 5000) {
+      typeFilter = ['A', 'B'];
+    }
+
+    const associations = await Association.findAll({
+      where: {
+        monthlyAmount: {
+          [Op.lte]: userAmount
+        },
+        type: {
+          [Op.in]: typeFilter
+        },
+        status: 'pending' // Only pending associations
+      },
+      order: [['monthlyAmount', 'ASC']]
+    });
+
+    res.json({ success: true, data: associations });
+
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'فشل في الاسترجاع' });
+  }
+});
+
 
 module.exports = router;
