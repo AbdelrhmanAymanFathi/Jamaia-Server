@@ -125,6 +125,63 @@ router.post('/pay', auth, async (req, res) => {
   }
 });
 
+router.post('/pay/suggest', auth, async (req, res) => {
+  try {
+    const { amount } = req.body;
+
+    if (!amount || isNaN(amount)) {
+      return res.status(400).json({
+        success: false,
+        error: 'المبلغ غير صالح أو مفقود'
+      });
+    }
+
+    const inputAmount = parseFloat(amount);
+    const lowerBound = inputAmount - 1000;
+    const upperBound = inputAmount + 1000;
+
+    const suggestions = await Association.findAll({
+      where: {
+        monthlyAmount: {
+          [Op.between]: [lowerBound, upperBound]
+        },
+        status: 'pending'
+      },
+      order: [['monthlyAmount', 'ASC']],
+      limit: 10
+    });
+
+    if (suggestions.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'لا توجد جمعيات قريبة من هذا المبلغ',
+        suggestions: []
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `تم العثور على جمعيات بقيمة قريبة من ${inputAmount} جنيه`,
+      suggestions: suggestions.map(a => ({
+        id: a.id,
+        name: a.name,
+        monthlyAmount: a.monthlyAmount,
+        duration: a.duration,
+        type: a.type
+      }))
+    });
+
+  } catch (error) {
+    console.error('خطأ في اقتراح الدفع:', error);
+    res.status(500).json({
+      success: false,
+      error: 'فشل في اقتراح الدفع',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+
 router.post('/topup', auth, async (req, res) => {
   const transaction = await sequelize.transaction();
 
